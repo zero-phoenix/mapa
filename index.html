@@ -1,0 +1,382 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="robots" content="noindex,nofollow">
+<meta name="referrer" content="no-referrer">
+<title>Mapa del sistema de agentes</title>
+<style>
+:root{--sup:#1a1a19;--sup2:#242422;--sup3:#30302d;--tinta:#ecece8;--tinta2:#b4b4ad;--tinta3:#85857f;--linea:#44443f;
+  --ok:#0ca30c;--mal:#d03b3b;--medio:#fab219;--nada:#8f939c;--foco:#6fb1ff}
+@media (prefers-color-scheme:light){:root{--sup:#fcfcfb;--sup2:#f1f0ec;--sup3:#e4e3de;--tinta:#1c1c1a;--tinta2:#55554f;--tinta3:#7b7b74;--linea:#c9c8c2;--nada:#7d818a;--foco:#1c6fd6}}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--sup);color:var(--tinta);font:15px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;overflow:hidden}
+#lienzo{position:fixed;inset:0;width:100%;height:100%;touch-action:none;user-select:none;-webkit-user-select:none;cursor:grab}
+header{position:fixed;top:0;left:0;right:0;padding:calc(8px + env(safe-area-inset-top)) 10px 6px;display:flex;flex-wrap:wrap;gap:6px;align-items:center;
+  background:linear-gradient(var(--sup) 70%,transparent);pointer-events:none;z-index:3}
+header>*{pointer-events:auto}
+h1{font-size:15px;margin:0 6px 0 2px;font-weight:650}
+.pastilla,.btn{border:1px solid var(--linea);background:var(--sup2);color:var(--tinta);border-radius:999px;padding:5px 10px;font:inherit;font-size:13px;display:inline-flex;gap:6px;align-items:center;white-space:nowrap}
+.btn{cursor:pointer}.btn[aria-pressed=true]{background:var(--tinta);color:var(--sup);border-color:var(--tinta)}
+.pastilla.aviso{border-color:var(--medio)}
+.ico{width:14px;height:14px;flex:none}
+#barra{position:fixed;left:0;right:0;bottom:0;padding:6px 10px calc(8px + env(safe-area-inset-bottom));display:flex;gap:6px;overflow-x:auto;z-index:3;
+  background:linear-gradient(transparent,var(--sup) 35%)}
+#buscar{flex:1 0 110px;min-width:110px;border:1px solid var(--linea);background:var(--sup2);color:var(--tinta);border-radius:999px;padding:6px 12px;font:inherit;font-size:14px}
+.hoja{position:fixed;z-index:5;background:var(--sup2);border:1px solid var(--linea);overflow:auto;display:none;box-shadow:0 8px 30px #0006}
+.hoja.abierta{display:block}
+#ficha,#lista,#sobre{left:0;right:0;bottom:0;max-height:62vh;border-radius:16px 16px 0 0;padding:14px 16px calc(18px + env(safe-area-inset-bottom))}
+@media (min-width:860px){#ficha,#lista,#sobre{left:auto;top:64px;bottom:64px;right:12px;width:400px;max-height:none;border-radius:14px}}
+.cerrar{position:sticky;top:0;float:right;border:0;background:var(--sup3);color:var(--tinta);width:32px;height:32px;border-radius:50%;font-size:18px;cursor:pointer}
+h2{font-size:18px;margin:2px 44px 6px 0}h3{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--tinta3);margin:16px 0 6px}
+p{margin:6px 0}.suave{color:var(--tinta2)}.chico{font-size:13px}
+.estado{display:inline-flex;gap:6px;align-items:center;font-weight:600;font-size:13px;border-radius:999px;padding:3px 10px;border:1.5px solid}
+.e-funciona{border-color:var(--ok)}.e-reparar{border-color:var(--mal)}.e-mejorar{border-color:var(--medio)}
+.e-nodemostrado,.e-estructura,.e-decision,.e-resuelto,.e-hecho{border-color:var(--nada);border-style:dashed}
+.tarjeta{border:1px solid var(--linea);border-left-width:4px;border-radius:10px;padding:9px 11px;margin:8px 0;background:var(--sup)}
+.tarjeta.e-funciona{border-left-color:var(--ok)}.tarjeta.e-reparar{border-left-color:var(--mal)}.tarjeta.e-mejorar{border-left-color:var(--medio)}
+.tarjeta.e-nodemostrado,.tarjeta.e-decision,.tarjeta.e-resuelto{border-left-color:var(--nada);border-style:solid;border-left-style:dashed}
+.etq{font-size:11px;font-weight:700;letter-spacing:.04em;border:1px solid var(--linea);border-radius:4px;padding:1px 5px;color:var(--tinta2)}
+.ev{border-top:1px dashed var(--linea);margin-top:7px;padding-top:6px;font-size:13px}
+.fila{display:flex;gap:8px;align-items:center;padding:8px 4px;border-bottom:1px solid var(--linea);cursor:pointer;width:100%;background:none;border-left:0;border-right:0;border-top:0;color:inherit;font:inherit;text-align:left}
+.fila:hover{background:var(--sup3)}
+code{font-size:12px;background:var(--sup3);padding:1px 5px;border-radius:4px;word-break:break-all}
+#carga{position:fixed;inset:0;display:grid;place-items:center;text-align:center;padding:24px;z-index:9;background:var(--sup)}
+#carga input{width:min(92vw,420px);padding:10px;border-radius:8px;border:1px solid var(--linea);background:var(--sup2);color:var(--tinta);font:inherit}
+svg text{font:600 11px system-ui,sans-serif;fill:var(--tinta);paint-order:stroke;stroke:var(--sup);stroke-width:3px;stroke-linejoin:round}
+svg text.plano{font-size:11px;letter-spacing:.14em;fill:var(--tinta3);font-weight:700}
+svg text.sector{font-size:12px;fill:var(--tinta2);cursor:pointer}
+.ne{vector-effect:non-scaling-stroke}
+</style>
+</head>
+<body>
+<div id="carga"><div><p id="cargaTexto">Cargando el mapa…</p><form id="claveForm" hidden><p class="suave chico">Este mapa está cifrado. Pega aquí la clave del enlace.</p><input id="claveCampo" autocomplete="off" placeholder="clave"><p><button class="btn">Abrir</button></p></form></div></div>
+<header>
+  <h1>Mapa del sistema</h1>
+  <span class="pastilla" id="edad" title="Antigüedad de los datos"></span>
+  <span id="chips" style="display:contents"></span>
+</header>
+<svg id="lienzo" role="img" aria-label="Mapa tridimensional del sistema de agentes"><g id="gPlanos"></g><g id="gAristas"></g><g id="gNodos"></g></svg>
+<nav id="barra">
+  <input id="buscar" type="search" placeholder="Buscar…" aria-label="Buscar en el mapa">
+  <button class="btn" id="bLista">Lista</button>
+  <button class="btn" data-vista="3d" aria-pressed="true">3D</button>
+  <button class="btn" data-vista="planta">Planta</button>
+  <button class="btn" data-vista="perfil">Perfil</button>
+  <button class="btn" data-plano="proposiciones" aria-pressed="true">Proposiciones</button>
+  <button class="btn" data-plano="hechos" aria-pressed="true">Hechos</button>
+  <button class="btn" id="bNombres" aria-pressed="false">Nombres</button>
+  <button class="btn" id="bSobre">Sobre este mapa</button>
+</nav>
+<aside class="hoja" id="ficha" aria-live="polite"></aside>
+<aside class="hoja" id="lista"></aside>
+<aside class="hoja" id="sobre"></aside>
+<script>
+"use strict";
+let DATOS = /*__DATOS__*/null;
+const $ = (s, r = document) => r.querySelector(s);
+const NS = "http://www.w3.org/2000/svg";
+const svg = (t, a = {}, p) => { const e = document.createElementNS(NS, t); for (const k in a) e.setAttribute(k, a[k]); if (p) p.appendChild(e); return e; };
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const ESTADO = { funciona: "Funciona", reparar: "Por reparar", mejorar: "Por mejorar", nodemostrado: "No demostrado", estructura: "Estructura", decision: "Decisión", resuelto: "Resuelto", hecho: "Hecho" };
+const COLOR = { funciona: "var(--ok)", reparar: "var(--mal)", mejorar: "var(--medio)", nodemostrado: "var(--nada)", estructura: "var(--linea)", decision: "var(--nada)", resuelto: "var(--nada)", hecho: "var(--tinta2)" };
+const ETQ = { VERIFICADO: "verificado", OBSERVACION: "observado", INFERIDO: "inferido", CANDIDATA: "candidato", DECISION: "decisión" };
+const TIPO_EV = { prueba_real: "prueba real", prueba_simulada: "prueba simulada", observacion: "observación", declaracion: "declaración", senal_externa: "pista externa" };
+const VERBO = { carga: "declara", usa_modelo: "usa el modelo de", enruta: "envía a", respalda: "tiene de respaldo a", lee: "lee", sincroniza: "se copia a", publica: "da acceso a", conecta: "está en", vigila: "vigila", ejecuta: "ejecuta", alimenta: "alimenta", lanza: "lanza", pertenece: "es parte de", aloja: "aloja", candidata_para: "es opción para", entra_por: "entra por" };
+const GLIFO = { funciona: "M-4.2 .3 L-1.3 3.2 L4.4 -3.2", reparar: "M-3.4 -3.4 L3.4 3.4 M3.4 -3.4 L-3.4 3.4", mejorar: "M0 -4.4 L0 1 M0 3.6 L0 3.7" };
+const icono = (e) => `<svg class="ico" viewBox="-8 -8 16 16"><circle r="6.5" fill="${["funciona", "reparar", "mejorar"].includes(e) ? COLOR[e] : "none"}" stroke="${COLOR[e] || "var(--nada)"}" stroke-width="1.6" ${GLIFO[e] ? "" : 'stroke-dasharray="2.5 2"'}/>${GLIFO[e] ? `<path d="${GLIFO[e]}" stroke="#111" stroke-width="1.9" fill="none" stroke-linecap="round" stroke-linejoin="round"/>` : ""}</svg>`;
+
+// ---------- fechas
+const MES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+const aFecha = (s) => new Date(s.length === 10 ? s + "T12:00:00Z" : s);
+const fechaTexto = (s) => { const d = aFecha(s); return `${d.getUTCDate()} ${MES[d.getUTCMonth()]} ${d.getUTCFullYear()}`; };
+function hace(s) { const m = (Date.now() - aFecha(s).getTime()) / 60000; if (m < 0) return "ahora"; if (m < 90) return `hace ${Math.max(1, Math.round(m))} min`; if (m < 2880) return `hace ${Math.round(m / 60)} h`; return `hace ${Math.round(m / 1440)} días`; }
+const dias = (s) => (Date.now() - aFecha(s).getTime()) / 86400000;
+
+// ---------- modelo
+let nodos = [], aristas = [], porId = {}, vecinos = {};
+const cam = { yaw: 0.62, pitch: 0.5, zoom: 1, px: 0, py: 0 };
+const ver = { planos: { proposiciones: true, hechos: true }, nombres: false, estados: new Set(), texto: "", sector: null, sel: null };
+const lienzo = $("#lienzo"), gN = $("#gNodos"), gA = $("#gAristas"), gP = $("#gPlanos");
+let anillos = [], rotulos = [], RADIO = 500;
+
+function preparar(d) {
+  nodos = []; aristas = []; porId = {}; vecinos = {};
+  const add = (n) => { nodos.push(n); porId[n.id] = n; vecinos[n.id] = new Set(); return n; };
+  for (const o of d.objetos) add({ ...o, clase: "obj", plano: "figura", rotulo: o.nombre });
+  for (const r of d.relaciones) {
+    const a = porId[r.de], b = porId[r.a];
+    const medio = [(a.pos[0] + b.pos[0]) / 2, 0, (a.pos[2] + b.pos[2]) / 2];
+    porId[r.id] = { ...r, clase: "rel", plano: "figura", pos: medio, rotulo: `${a.nombre} ${VERBO[r.tipo] || r.tipo} ${b.nombre}`, a: a, b: b };
+    vecinos[r.id] = new Set([a.id, b.id]);
+    aristas.push({ id: r.id, tipo: "rel", a, b, estado: r.estado, plano: "figura", ref: porId[r.id] });
+    vecinos[a.id].add(b.id); vecinos[b.id].add(a.id);
+  }
+  for (const p of d.proposiciones) add({ ...p, clase: "prop", plano: "proposiciones", rotulo: p.texto });
+  for (const e of d.evidencias) add({ ...e, clase: "ev", plano: "hechos", estado: "hecho", rotulo: e.resumen });
+  for (const p of d.proposiciones) {
+    for (const s of p.sobre) { aristas.push({ tipo: "sobre", a: porId[p.id], b: porId[s], estado: p.estado, plano: "proposiciones" }); vecinos[p.id].add(s); vecinos[s].add(p.id); if (porId[s].clase === "rel") { vecinos[p.id].add(porId[s].a.id); vecinos[p.id].add(porId[s].b.id); } }
+    for (const e of p.evidencia) { aristas.push({ tipo: "apoya", a: porId[e], b: porId[p.id], estado: "hecho", plano: "hechos" }); vecinos[p.id].add(e); vecinos[e].add(p.id); }
+  }
+}
+
+function dibujar(d) {
+  gN.textContent = gA.textContent = gP.textContent = ""; anillos = []; rotulos = [];
+  const R = RADIO = d.radio || 500;
+  for (const [nombre, y, leyenda] of [["hechos", d.planos.hechos, "HECHOS · lo observado"], ["figura", d.planos.figura, "FIGURA · el sistema"], ["proposiciones", d.planos.proposiciones, "PROPOSICIONES · lo que se afirma"]]) {
+    const pts = []; for (let i = 0; i < 56; i++) { const t = i / 56 * 2 * Math.PI; pts.push([R * Math.cos(t), y, R * Math.sin(t)]); }
+    anillos.push({ nombre, pts, el: svg("polygon", { fill: "var(--tinta)", "fill-opacity": nombre === "figura" ? .035 : .02, stroke: "var(--linea)", "stroke-width": 1, "stroke-dasharray": nombre === "figura" ? "" : "3 5" }, gP),
+      txt: Object.assign(svg("text", { class: "plano", "text-anchor": "start" }, gP), { textContent: leyenda }) });
+  }
+  for (const s of d.sectores) { const t = svg("text", { class: "sector", "text-anchor": "middle" }, gP); t.textContent = s.nombre; t.dataset.sector = s.id; rotulos.push({ el: t, pos: [(R + 30) * Math.cos(s.angulo), 0, (R + 30) * Math.sin(s.angulo)], id: s.id }); }
+  for (const a of aristas) {
+    const rel = a.tipo === "rel";
+    a.el = svg("line", { stroke: rel ? COLOR[a.estado] : "var(--tinta3)", "stroke-width": rel ? (a.estado === "estructura" ? 1 : 1.8) : .8, "stroke-linecap": "round",
+      "stroke-dasharray": rel ? (a.estado === "nodemostrado" ? "2 5" : a.estado === "estructura" ? "1 4" : "") : "1 3", opacity: rel ? (a.estado === "nodemostrado" ? .5 : .85) : .28 }, gA);
+  }
+  for (const n of nodos) {
+    const g = n.el = svg("g", {}, gN), c = COLOR[n.estado], lleno = ["funciona", "reparar", "mejorar"].includes(n.estado);
+    const viejo = n.ultima_prueba && dias(n.ultima_prueba) > 7 && n.estado === "funciona";
+    if (n.clase === "obj") {
+      svg("circle", { r: 11, class: "ne", fill: lleno ? c : "var(--sup)", stroke: c, "stroke-width": 2, "stroke-dasharray": lleno ? "" : "3 3", opacity: viejo ? .55 : 1 }, g);
+    } else if (n.clase === "prop") {
+      const dash = n.etiqueta === "INFERIDO" ? "2 2.5" : n.estado === "nodemostrado" || n.estado === "resuelto" ? "3 3" : "";
+      svg("path", { d: "M0 -10 L10 0 L0 10 L-10 0 Z", class: "ne", fill: lleno ? c : "var(--sup)", stroke: c, "stroke-width": 2, "stroke-dasharray": dash }, g);
+      if (n.etiqueta === "CANDIDATA") svg("path", { d: "M0 -14 L14 0 L0 14 L-14 0 Z", class: "ne", fill: "none", stroke: c, "stroke-width": 1, "stroke-dasharray": "3 3" }, g);
+    } else {
+      const fuerte = n.tipo === "prueba_real" || n.tipo === "observacion";
+      svg("rect", { x: -7, y: -7, width: 14, height: 14, rx: 2, class: "ne", fill: n.tipo === "prueba_real" ? "var(--tinta)" : fuerte ? "var(--tinta3)" : "var(--sup)", stroke: "var(--tinta2)", "stroke-width": 1.5, "stroke-dasharray": fuerte ? "" : "2 2" }, g);
+    }
+    if (GLIFO[n.estado] && n.clase !== "ev") svg("path", { d: GLIFO[n.estado], class: "ne", fill: "none", stroke: "#111", "stroke-width": 2, "stroke-linecap": "round", "stroke-linejoin": "round" }, g);
+    n.anillo = svg("circle", { r: 17, class: "ne", fill: "none", stroke: "var(--foco)", "stroke-width": 2.5, visibility: "hidden" }, g);
+    if (n.clase === "obj") { n.txt = svg("text", { x: 15, y: 4 }, g); n.txt.textContent = n.nombre; }
+  }
+}
+
+// ---------- proyección
+let W = 0, H = 0, sucio = false, ordenar = true;
+function proyecta(p) {
+  const cy = Math.cos(cam.yaw), sy = Math.sin(cam.yaw), cp = Math.cos(cam.pitch), sp = Math.sin(cam.pitch);
+  const x1 = p[0] * cy + p[2] * sy, z1 = -p[0] * sy + p[2] * cy;
+  const y1 = p[1] * cp + z1 * sp, z2 = -p[1] * sp + z1 * cp;  // se mira desde arriba
+  const f = 5200 / (5200 + z2);                                // perspectiva suave: casi ortográfica
+  return [W / 2 + cam.px + x1 * f * cam.zoom, H / 2 + cam.py - y1 * f * cam.zoom, z2, f * cam.zoom];
+}
+function visible(n) {
+  if (n.plano !== "figura" && !ver.planos[n.plano]) return false;
+  return true;
+}
+function apagado(n) {
+  if (ver.sel) return !(n.id === ver.sel || vecinos[ver.sel]?.has(n.id));
+  if (ver.estados.size && !ver.estados.has(n.estado)) return true;
+  if (ver.sector && n.clase === "obj" && n.sector !== ver.sector) return true;
+  if (ver.texto && !(n.rotulo || "").toLowerCase().includes(ver.texto) && !(n.id || "").includes(ver.texto)) return true;
+  return false;
+}
+function pinta() {
+  sucio = false;
+  for (const n of nodos) {
+    const v = visible(n); n.el.style.display = v ? "" : "none"; if (!v) continue;
+    const s = n.s = proyecta(n.pos), k = Math.max(.42, Math.min(2.6, s[3] * 1.15));
+    n.el.setAttribute("transform", `translate(${s[0].toFixed(1)} ${s[1].toFixed(1)}) scale(${k.toFixed(3)})`);
+    const off = apagado(n); n.el.style.opacity = off ? .13 : 1;
+    n.anillo.setAttribute("visibility", n.id === ver.sel ? "visible" : "hidden");
+    if (n.txt) {
+      const on = !off && (ver.nombres || k > 1.05 || (ver.sel && (n.id === ver.sel || vecinos[ver.sel].has(n.id))) || (ver.texto && !off));
+      n.txt.style.display = on ? "" : "none";
+      // El nombre no se encoge con el nodo: siempre queda en un tamaño legible.
+      if (on) n.txt.setAttribute("transform", `scale(${(Math.max(.86, Math.min(1.5, k)) / k).toFixed(3)})`);
+    }
+  }
+  for (const r of Object.values(porId)) if (r.clase === "rel") r.s = proyecta(r.pos);
+  for (const a of aristas) {
+    const v = (a.plano === "figura" || ver.planos[a.plano]) && visible(a.a) && visible(a.b);
+    a.el.style.display = v ? "" : "none"; if (!v) continue;
+    const p = a.a.s, q = a.b.s;
+    a.el.setAttribute("x1", p[0].toFixed(1)); a.el.setAttribute("y1", p[1].toFixed(1)); a.el.setAttribute("x2", q[0].toFixed(1)); a.el.setAttribute("y2", q[1].toFixed(1));
+    let off;
+    if (ver.sel) off = !(a.id === ver.sel || a.a.id === ver.sel || a.b.id === ver.sel || (a.tipo !== "rel" && (vecinos[ver.sel].has(a.a.id) && vecinos[ver.sel].has(a.b.id) && porId[ver.sel].clase !== "obj")));
+    else off = a.tipo === "rel" ? (apagado(a.a) && apagado(a.b)) || (ver.estados.size && !ver.estados.has(a.estado)) : (apagado(a.a) || apagado(a.b));
+    a.el.style.opacity = off ? .05 : (ver.sel ? .95 : "");
+    if (a.tipo === "rel") a.el.setAttribute("stroke-width", a.id === ver.sel ? 4 : a.estado === "estructura" ? 1 : 1.8);
+  }
+  for (const an of anillos) {
+    const on = an.nombre === "figura" || ver.planos[an.nombre]; an.el.style.display = an.txt.style.display = on ? "" : "none"; if (!on) continue;
+    let arriba = Infinity, izq = Infinity;
+    an.el.setAttribute("points", an.pts.map((p) => { const s = proyecta(p); arriba = Math.min(arriba, s[1]); izq = Math.min(izq, s[0]); return s[0].toFixed(1) + "," + s[1].toFixed(1); }).join(" "));
+    // El rótulo va en la esquina superior izquierda de la elipse (siempre vacía) y nunca se sale de la pantalla.
+    an.txt.setAttribute("x", Math.max(8, Math.min(W - 236, izq)).toFixed(1)); an.txt.setAttribute("y", (arriba + 9).toFixed(1));
+  }
+  for (const r of rotulos) {
+    const s = proyecta(r.pos), lado = s[0] < W * .3 ? "start" : s[0] > W * .7 ? "end" : "middle";
+    r.el.setAttribute("text-anchor", lado); r.el.setAttribute("x", Math.max(4, Math.min(W - 4, s[0])).toFixed(1)); r.el.setAttribute("y", s[1].toFixed(1));
+    r.el.style.opacity = ver.sector && ver.sector !== r.id ? .35 : 1; r.el.style.fontWeight = ver.sector === r.id ? 800 : 600;
+  }
+  if (ordenar) { ordenar = false; [...nodos].filter((n) => n.s).sort((a, b) => b.s[2] - a.s[2]).forEach((n) => gN.appendChild(n.el)); }
+}
+function pide(orden) { if (orden) ordenar = true; if (!sucio) { sucio = true; requestAnimationFrame(pinta); } }
+function ajusta() { W = lienzo.clientWidth; H = lienzo.clientHeight; pide(true); }
+function encuadre() { const r = RADIO / 500; cam.zoom = Math.min(W / (1160 * r), (H - 150) / (1150 + 480 * r)); cam.px = 0; cam.py = 14; }
+function planos(on) { for (const p of ["proposiciones", "hechos"]) { ver.planos[p] = on; $(`[data-plano=${p}]`).setAttribute("aria-pressed", on); } }
+function vista(v) {
+  const meta = { "3d": [0.62, 0.5], planta: [0, Math.PI / 2], perfil: [0.35, 0.03] }[v];
+  const de = [cam.yaw, cam.pitch], t0 = performance.now();
+  // Vista desde arriba: los tres planos caerían uno sobre otro, así que queda solo la figura.
+  planos(v !== "planta"); encuadre(); if (v === "planta") cam.zoom = Math.min(W, H - 150) / (2.36 * RADIO);
+  document.querySelectorAll("[data-vista]").forEach((b) => b.setAttribute("aria-pressed", b.dataset.vista === v));
+  (function paso(t) { const k = Math.min(1, (t - t0) / 380), e = k * k * (3 - 2 * k); cam.yaw = de[0] + (meta[0] - de[0]) * e; cam.pitch = de[1] + (meta[1] - de[1]) * e; pide(k === 1); if (k < 1) requestAnimationFrame(paso); })(t0);
+}
+
+// ---------- gestos
+const dedos = new Map(); let gesto = null, movido = 0;
+lienzo.addEventListener("pointerdown", (e) => { lienzo.setPointerCapture(e.pointerId); dedos.set(e.pointerId, [e.clientX, e.clientY]); movido = 0; gesto = null; lienzo.style.cursor = "grabbing"; });
+lienzo.addEventListener("pointermove", (e) => {
+  if (!dedos.has(e.pointerId)) return;
+  const antes = dedos.get(e.pointerId); dedos.set(e.pointerId, [e.clientX, e.clientY]);
+  if (dedos.size === 1) {
+    const dx = e.clientX - antes[0], dy = e.clientY - antes[1]; movido += Math.abs(dx) + Math.abs(dy);
+    cam.yaw += dx * .008; cam.pitch = Math.max(-.15, Math.min(Math.PI / 2, cam.pitch + dy * .006)); pide();
+  } else if (dedos.size === 2) {
+    const [a, b] = [...dedos.values()], d = Math.hypot(a[0] - b[0], a[1] - b[1]), m = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+    if (gesto) { const k = d / gesto.d; zoomEn(m[0], m[1], k); cam.px += m[0] - gesto.m[0]; cam.py += m[1] - gesto.m[1]; }
+    gesto = { d, m }; movido += 9; pide();
+  }
+});
+function fin(e) { if (!dedos.has(e.pointerId)) return; dedos.delete(e.pointerId); gesto = null; lienzo.style.cursor = "grab"; pide(true); if (dedos.size === 0 && movido < 7) toque(e.clientX, e.clientY); }
+lienzo.addEventListener("pointerup", fin); lienzo.addEventListener("pointercancel", (e) => { dedos.delete(e.pointerId); gesto = null; });
+lienzo.addEventListener("wheel", (e) => { e.preventDefault(); zoomEn(e.clientX, e.clientY, Math.exp(-e.deltaY * .0015)); pide(true); }, { passive: false });
+function zoomEn(x, y, k) { const z = Math.max(.15, Math.min(9, cam.zoom * k)); k = z / cam.zoom; cam.px = (x - W / 2) - (x - W / 2 - cam.px) * k; cam.py = (y - H / 2) - (y - H / 2 - cam.py) * k; cam.zoom = z; }
+function toque(x, y) {
+  const r = lienzo.getBoundingClientRect(); x -= r.left; y -= r.top;
+  let mejor = null, dm = 26;
+  for (const n of nodos) { if (!n.s || !visible(n)) continue; const d = Math.hypot(n.s[0] - x, n.s[1] - y) - (apagado(n) ? -8 : 0); if (d < dm) { dm = d; mejor = n.id; } }
+  if (!mejor) { dm = 12; for (const a of aristas) { if (a.tipo !== "rel" || a.el.style.display === "none") continue; const d = distSeg(x, y, a.a.s, a.b.s); if (d < dm) { dm = d; mejor = a.id; } } }
+  if (!mejor) for (const t of rotulos) { const b = t.el.getBBox(); if (x > b.x - 6 && x < b.x + b.width + 6 && y > b.y - 6 && y < b.y + b.height + 6) { ver.sector = ver.sector === t.id ? null : t.id; pide(); return; } }
+  elige(mejor);
+}
+function distSeg(x, y, a, b) { const vx = b[0] - a[0], vy = b[1] - a[1], l = vx * vx + vy * vy || 1; const t = Math.max(0, Math.min(1, ((x - a[0]) * vx + (y - a[1]) * vy) / l)); return Math.hypot(x - a[0] - t * vx, y - a[1] - t * vy); }
+
+// ---------- ficha
+function estadoHtml(e) { return `<span class="estado e-${e}">${icono(e)}${ESTADO[e] || e}</span>`; }
+function propHtml(p) {
+  const evs = p.evidencia.map((id) => porId[id]).sort((a, b) => b.fecha.localeCompare(a.fecha));
+  return `<div class="tarjeta e-${p.estado}"><div>${estadoHtml(p.estado)} <span class="etq">${ETQ[p.etiqueta] || p.etiqueta}</span></div>
+  <p><a href="#" data-ir="${p.id}" style="color:inherit;text-decoration:none">${esc(p.texto)}</a></p>
+  ${p.cierre ? `<p class="chico"><b>Resuelto.</b> ${esc(p.cierre)}</p>` : ""}
+  ${p.falta && !p.cerrada ? `<p class="chico"><b>Falta:</b> ${esc(p.falta)}</p>` : ""}
+  ${p.ref ? `<p class="chico suave"><b>Se refutaría si:</b> ${esc(p.ref)}</p>` : `<p class="chico suave">Es una decisión del propietario, no un hecho comprobable.</p>`}
+  ${p.de ? `<p class="chico suave"><b>Se infiere de:</b> ${esc(p.de)}</p>` : ""}
+  ${evs.length ? evs.map(evHtml).join("") : `<div class="ev suave">Sin evidencia: nadie lo ha probado todavía.</div>`}</div>`;
+}
+function evHtml(e) { const v = dias(e.fecha) > 7; return `<div class="ev"><b>${fechaTexto(e.fecha)}</b> · ${TIPO_EV[e.tipo]}${v ? ` · <span class="suave">comparación antigua (${hace(e.fecha)})</span>` : ""}<br>${esc(e.resumen)}<br><code>${esc(e.archivo || "")}</code></div>`; }
+function ficha(id) {
+  const n = porId[id], f = $("#ficha"); if (!n) { f.classList.remove("abierta"); return; }
+  let h = `<button class="cerrar" aria-label="Cerrar">×</button>`;
+  const props = (n.proposiciones || []).map((p) => porId[p]);
+  const orden = { reparar: 0, mejorar: 1, nodemostrado: 2, funciona: 3, decision: 4, resuelto: 5 };
+  props.sort((a, b) => orden[a.estado] - orden[b.estado]);
+  if (n.clase === "obj" || n.clase === "rel") {
+    h += `<h2>${esc(n.clase === "obj" ? n.nombre : n.rotulo)}</h2><p>${estadoHtml(n.estado)}</p>`;
+    if (n.que_es) h += `<p>${esc(n.que_es)}</p>`;
+    if (n.nota) h += `<p class="suave">${esc(n.nota)}</p>`;
+    if (n.estado === "estructura") h += `<p class="suave">Relación de estructura: dice dónde está cada cosa, no afirma que funcione.</p>`;
+    else h += `<p class="chico suave">${n.ultima_prueba ? `Última comparación con la realidad: <b>${fechaTexto(n.ultima_prueba)}</b> (${hace(n.ultima_prueba)}).` : "Nunca se ha comparado con la realidad: <b>no demostrado</b> no significa que falle."}</p>`;
+    h += `<h3>Lo que se afirma</h3>` + (props.length ? props.map(propHtml).join("") : `<p class="suave">Nada todavía. ${n.declarada ? "Está escrito en la configuración, y eso no cuenta como prueba." : ""}</p>`);
+    if (n.clase === "obj") {
+      const rels = aristas.filter((a) => a.tipo === "rel" && (a.a.id === id || a.b.id === id));
+      if (rels.length) h += `<h3>Relaciones</h3>` + rels.map((a) => `<button class="fila" data-ir="${a.id}">${icono(a.estado)}<span>${esc(a.a.id === id ? `${VERBO[a.ref.tipo] || a.ref.tipo} ${a.b.nombre}` : `${a.a.nombre} ${VERBO[a.ref.tipo] || a.ref.tipo} esto`)}</span></button>`).join("");
+      if (n.otros_servidores) h += `<p class="chico suave">Además declara ${n.otros_servidores.length} servidores que no están en el mapa: ${esc(n.otros_servidores.join(", "))}.</p>`;
+    }
+    if (n.local) h += `<h3>Solo en la versión local</h3>` + Object.entries(n.local).filter(([k]) => k !== "monitor").map(([k, v]) => `<p class="chico">${esc(k)}: <code>${esc(typeof v === "string" ? v : JSON.stringify(v))}</code></p>`).join("");
+  } else if (n.clase === "prop") {
+    h += `<h2>Proposición</h2>${propHtml(n)}<h3>Habla de</h3>` + n.sobre.map((s) => `<button class="fila" data-ir="${s}">${icono(porId[s].estado)}<span>${esc(porId[s].rotulo)}</span></button>`).join("");
+  } else {
+    h += `<h2>Hecho</h2>${evHtml(n)}<h3>Respalda</h3>` + n.apoya.map((s) => `<button class="fila" data-ir="${s}">${icono(porId[s].estado)}<span>${esc(porId[s].texto)}</span></button>`).join("");
+  }
+  h += `<p class="chico suave" style="margin-top:14px">Identificador: <code>${esc(id)}</code></p>`;
+  f.innerHTML = h; f.scrollTop = 0; f.classList.add("abierta");
+}
+function elige(id, centrar) {
+  ver.sel = id || null; cierra("#lista"); cierra("#sobre"); ficha(ver.sel);
+  if (id && centrar && porId[id]) { const s = proyecta(porId[id].pos); cam.px += W / 2 - s[0]; cam.py += H * .32 - s[1]; }
+  pide(true);
+}
+function cierra(s) { $(s).classList.remove("abierta"); }
+document.addEventListener("click", (e) => {
+  const ir = e.target.closest("[data-ir]"); if (ir) { e.preventDefault(); elige(ir.dataset.ir, true); return; }
+  if (e.target.closest(".cerrar")) { const h = e.target.closest(".hoja"); h.classList.remove("abierta"); if (h.id === "ficha") { ver.sel = null; pide(); } }
+});
+
+// ---------- cabecera, lista, sobre
+function cabecera(d) {
+  const ed = $("#edad"), ref = d.monitor_al || d.datos_al, viejo = (Date.now() - aFecha(ref).getTime()) > 45 * 60000;
+  ed.textContent = "Datos de " + hace(ref) + (viejo ? " · el monitor no ha vuelto a medir" : ""); ed.classList.toggle("aviso", viejo);
+  ed.title = "Datos al " + ref;
+  const c = d.resumen.objetos, chips = $("#chips"); chips.innerHTML = "";
+  for (const e of ["reparar", "mejorar", "nodemostrado", "funciona"]) {
+    const b = document.createElement("button"); b.className = "btn"; b.setAttribute("aria-pressed", ver.estados.has(e)); b.innerHTML = `${icono(e)}${ESTADO[e]} <b>${c[e]}</b>`;
+    b.onclick = () => { ver.estados.has(e) ? ver.estados.delete(e) : ver.estados.add(e); b.setAttribute("aria-pressed", ver.estados.has(e)); elige(null); };
+    chips.appendChild(b);
+  }
+}
+function lista() {
+  const l = $("#lista"); let h = `<button class="cerrar" aria-label="Cerrar">×</button><h2>Todo, por estado</h2><p class="chico suave">La misma información del mapa, en lista.</p>`;
+  for (const e of ["reparar", "mejorar", "nodemostrado", "funciona"]) {
+    const os = nodos.filter((n) => n.clase === "obj" && n.estado === e), rs = aristas.filter((a) => a.tipo === "rel" && a.estado === e);
+    h += `<h3>${ESTADO[e]} · ${os.length} cosas, ${rs.length} relaciones</h3>` + os.map((n) => `<button class="fila" data-ir="${n.id}">${icono(e)}<span>${esc(n.nombre)}</span></button>`).join("")
+      + rs.map((a) => `<button class="fila" data-ir="${a.id}">${icono(e)}<span class="suave">${esc(a.ref.rotulo)}</span></button>`).join("");
+  }
+  l.innerHTML = h; l.classList.add("abierta"); cierra("#ficha"); cierra("#sobre");
+}
+function sobre(d) {
+  const s = $("#sobre");
+  s.innerHTML = `<button class="cerrar" aria-label="Cerrar">×</button><h2>Sobre este mapa</h2>
+  <p>Tres planos, de abajo arriba: los <b>hechos</b> (lo que se observó, con fecha), la <b>figura</b> (las piezas del sistema y sus relaciones) y las <b>proposiciones</b> (lo que se afirma de ellas). Una afirmación sin una línea que baje hasta un hecho no está demostrada.</p>
+  <p>${["funciona", "mejorar", "reparar", "nodemostrado"].map((e) => estadoHtml(e)).join(" ")}</p>
+  <p class="chico">● pieza del sistema · ◆ proposición · ■ hecho. Borde punteado: inferido. Doble rombo: candidato, aún sin probar. Cuadro lleno: prueba real; gris: observación; hueco: prueba simulada, declaración o pista externa.</p>
+  <p class="chico suave">«Funciona» significa <b>corroborado</b> por la prueba que se muestra, en la fecha que se muestra; no significa verdadero para siempre. Una configuración escrita en disco no cuenta como prueba.</p>
+  <h3>Correspondencia con el Tractatus <span class="etq">decisión</span></h3>
+  ${d.doctrina.map((x) => `<div class="tarjeta e-decision"><b>${esc(x.tlp)}</b>${x.cita ? ` — «${esc(x.cita)}»` : ""}<p class="chico">${esc(x.regla)}</p></div>`).join("")}
+  <h3>Datos</h3><p class="chico">Datos al <code>${esc(d.datos_al)}</code> · versión ${d.alcance === "publico" ? "alojada (sin rutas ni direcciones)" : "local (completa)"} · ${d.objetos.length} piezas, ${d.relaciones.length} relaciones, ${d.proposiciones.length} proposiciones, ${d.evidencias.length} hechos.</p>`;
+  s.classList.add("abierta"); cierra("#ficha"); cierra("#lista");
+}
+$("#bLista").onclick = lista; $("#bSobre").onclick = () => sobre(DATOS);
+$("#bNombres").onclick = (e) => { ver.nombres = !ver.nombres; e.currentTarget.setAttribute("aria-pressed", ver.nombres); pide(); };
+document.querySelectorAll("[data-vista]").forEach((b) => b.onclick = () => vista(b.dataset.vista));
+document.querySelectorAll("[data-plano]").forEach((b) => b.onclick = () => { const p = b.dataset.plano; ver.planos[p] = !ver.planos[p]; b.setAttribute("aria-pressed", ver.planos[p]); pide(true); });
+$("#buscar").addEventListener("input", (e) => { ver.texto = e.target.value.trim().toLowerCase(); ver.sel = null; cierra("#ficha"); pide(); });
+$("#buscar").addEventListener("keydown", (e) => { if (e.key === "Enter" && ver.texto) { const n = nodos.find((n) => n.clase === "obj" && !apagado(n)); if (n) { e.target.blur(); elige(n.id, true); } } });
+addEventListener("resize", ajusta);
+addEventListener("keydown", (e) => { if (e.key === "Escape") { elige(null); cierra("#lista"); cierra("#sobre"); } });
+
+// ---------- arranque
+function arranca(d) {
+  DATOS = d; preparar(d); dibujar(d); cabecera(d); W = lienzo.clientWidth; H = lienzo.clientHeight; encuadre(); pide(true);
+  $("#carga").style.display = "none"; setInterval(() => cabecera(DATOS), 60000);
+  window.MAPA = { datos: d, elige, vista, cam, nodos: () => nodos.length };
+  const m = location.hash.match(/nodo=([\w.-]+)/); if (m && porId[m[1]]) elige(m[1], true);
+}
+const b64 = (t) => Uint8Array.from(atob(t.replace(/-/g, "+").replace(/_/g, "/")), (c) => c.charCodeAt(0));
+async function descifra(claveTexto) {
+  const sobreCifrado = await (await fetch("mapa.cifrado.json?t=" + Date.now(), { cache: "no-store" })).json();
+  const clave = await crypto.subtle.importKey("raw", b64(claveTexto), "AES-GCM", false, ["decrypt"]);
+  const claro = await crypto.subtle.decrypt({ name: "AES-GCM", iv: b64(sobreCifrado.iv) }, clave, b64(sobreCifrado.datos));
+  return JSON.parse(new TextDecoder().decode(claro));
+}
+async function abrir(claveTexto) {
+  try { const d = await descifra(claveTexto); try { localStorage.setItem("mapa.k", claveTexto); } catch (_) {} arranca(d); return true; }
+  catch (err) { $("#cargaTexto").textContent = "No se pudo abrir el mapa: la clave no corresponde o no hay conexión."; $("#claveForm").hidden = false; return false; }
+}
+(async function () {
+  if (DATOS) return arranca(DATOS);
+  const enlace = (location.hash.match(/k=([A-Za-z0-9_-]{43})/) || [])[1];
+  if (enlace) history.replaceState(null, "", location.pathname + location.search);
+  let guardada = null; try { guardada = localStorage.getItem("mapa.k"); } catch (_) {}
+  $("#claveForm").onsubmit = (e) => { e.preventDefault(); const v = ($("#claveCampo").value.match(/[A-Za-z0-9_-]{43}/) || [])[0]; if (v) abrir(v); };
+  if (enlace || guardada) await abrir(enlace || guardada); else { $("#cargaTexto").textContent = "Mapa del sistema de agentes"; $("#claveForm").hidden = false; }
+  setInterval(async () => { const k = (() => { try { return localStorage.getItem("mapa.k"); } catch (_) { return null; } })(); if (!k || !DATOS || document.hidden) return; try { const d = await descifra(k); if (d.datos_al !== DATOS.datos_al) { const sel = ver.sel; arranca(d); if (sel && porId[sel]) elige(sel); } } catch (_) {} }, 5 * 60000);
+})();
+</script>
+</body>
+</html>
