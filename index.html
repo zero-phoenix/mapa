@@ -63,6 +63,11 @@ svg text.sector{font-size:12px;fill:var(--tinta2);cursor:pointer}
   <button class="btn" id="quitar" hidden style="border-color:var(--foco)"></button>
 </header>
 <svg id="lienzo" role="img" aria-label="Mapa tridimensional del sistema de agentes"><g id="gPlanos"></g><g id="gAristas"></g><g id="gNodos"></g><g id="gRotulos"></g></svg>
+<div id="giro" style="position:fixed;left:10px;right:10px;bottom:calc(58px + env(safe-area-inset-bottom));z-index:3;display:flex;gap:8px;align-items:center">
+  <button class="btn" id="bGirar" aria-pressed="false" title="Girar solo">⟳ Girar</button>
+  <input id="rGiro" type="range" min="0" max="360" value="35" aria-label="Girar el mapa" style="flex:1;accent-color:var(--foco);height:28px">
+  <input id="rAltura" type="range" min="3" max="90" value="35" aria-label="Inclinar el mapa" style="width:28%;accent-color:var(--foco);height:28px">
+</div>
 <nav id="barra">
   <input id="buscar" type="search" placeholder="Buscar…" aria-label="Buscar en el mapa">
   <button class="btn" id="bChat">Preguntar</button>
@@ -244,6 +249,8 @@ function pinta() {
   }
   for (const an of anillos) {
     const on = an.nombre === "figura" || ver.planos[an.nombre]; an.el.style.display = an.txt.style.display = on ? "" : "none"; if (!on) continue;
+    // Con un solo plano a la vista su rótulo sobra y tapaba los nombres de los grupos.
+    if (an.nombre === "figura" && !ver.planos.proposiciones && !ver.planos.hechos) an.txt.style.display = "none";
     let arriba = Infinity, izq = Infinity;
     an.el.setAttribute("points", an.pts.map((p) => { const s = proyecta(p); arriba = Math.min(arriba, s[1]); izq = Math.min(izq, s[0]); return s[0].toFixed(1) + "," + s[1].toFixed(1); }).join(" "));
     // El rótulo va en la esquina superior izquierda de la elipse (siempre vacía) y nunca se sale de la pantalla.
@@ -429,6 +436,18 @@ function chat() {
   $("#fChat").onsubmit = (e) => { e.preventDefault(); const v = $("#q").value.trim(); $("#q").value = ""; envia(v); };
   pinta(); l.classList.add("abierta"); cierra("#ficha"); cierra("#sobre");
 }
+// Control giratorio: deslizador de giro, deslizador de inclinación y giro automático.
+let girando = null;
+const sincGiro = () => { $("#rGiro").value = ((cam.yaw * 180 / Math.PI) % 360 + 360) % 360; $("#rAltura").value = cam.pitch * 180 / Math.PI; };
+$("#rGiro").oninput = (e) => { cam.yaw = e.target.value * Math.PI / 180; pide(); };
+$("#rGiro").onchange = () => pide(true);
+$("#rAltura").oninput = (e) => { cam.pitch = e.target.value * Math.PI / 180; pide(); };
+$("#bGirar").onclick = (e) => {
+  if (girando) { cancelAnimationFrame(girando); girando = null; pide(true); }
+  else { let n = 0; (function paso() { cam.yaw += 0.006; if (++n % 20 === 0) ordenar = true; sincGiro(); pide(); girando = requestAnimationFrame(paso); })(); }
+  e.currentTarget.setAttribute("aria-pressed", !!girando);
+};
+lienzo.addEventListener("pointerup", sincGiro);
 $("#bRep").onclick = reparaciones; $("#bChat").onclick = chat;
 $("#bFiltros").onclick = filtros;
 $("#quitar").onclick = () => { ver.rama = null; avisoFiltro(); pide(true); };
