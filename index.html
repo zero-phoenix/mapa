@@ -5,12 +5,16 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
 <meta name="robots" content="noindex,nofollow">
 <meta name="referrer" content="no-referrer">
+<meta name="theme-color" content="#1a1a19">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icono-192.png">
+<link rel="apple-touch-icon" href="icono-192.png">
 <title>Mapa del sistema de agentes</title>
 <style>
 :root{--sup:#1a1a19;--sup2:#242422;--sup3:#30302d;--tinta:#ecece8;--tinta2:#b4b4ad;--tinta3:#85857f;--linea:#44443f;
   --ok:#0ca30c;--mal:#d03b3b;--medio:#fab219;--nada:#8f939c;--foco:#6fb1ff}
 @media (prefers-color-scheme:light){:root{--sup:#fcfcfb;--sup2:#f1f0ec;--sup3:#e4e3de;--tinta:#1c1c1a;--tinta2:#55554f;--tinta3:#7b7b74;--linea:#c9c8c2;--nada:#7d818a;--foco:#1c6fd6}}
-*{box-sizing:border-box}
+*{box-sizing:border-box}[hidden]{display:none!important}
 html,body{margin:0;height:100%;background:var(--sup);color:var(--tinta);font:15px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;overflow:hidden}
 #lienzo{position:fixed;inset:0;width:100%;height:100%;touch-action:none;user-select:none;-webkit-user-select:none;cursor:grab}
 header{position:fixed;top:0;left:0;right:0;padding:calc(8px + env(safe-area-inset-top)) 10px 6px;display:flex;flex-wrap:wrap;gap:6px;align-items:center;
@@ -56,16 +60,21 @@ svg text.sector{font-size:12px;fill:var(--tinta2);cursor:pointer}
   <h1>Mapa del sistema</h1>
   <span class="pastilla" id="edad" title="Antigüedad de los datos"></span>
   <span id="chips" style="display:contents"></span>
+  <button class="btn" id="quitar" hidden style="border-color:var(--foco)"></button>
 </header>
-<svg id="lienzo" role="img" aria-label="Mapa tridimensional del sistema de agentes"><g id="gPlanos"></g><g id="gAristas"></g><g id="gNodos"></g></svg>
+<svg id="lienzo" role="img" aria-label="Mapa tridimensional del sistema de agentes"><g id="gPlanos"></g><g id="gAristas"></g><g id="gNodos"></g><g id="gRotulos"></g></svg>
 <nav id="barra">
   <input id="buscar" type="search" placeholder="Buscar…" aria-label="Buscar en el mapa">
+  <button class="btn" id="bChat">Preguntar</button>
+  <button class="btn" id="bRep">Reparaciones</button>
   <button class="btn" id="bLista">Lista</button>
   <button class="btn" data-vista="3d" aria-pressed="true">3D</button>
   <button class="btn" data-vista="planta">Planta</button>
   <button class="btn" data-vista="perfil">Perfil</button>
-  <button class="btn" data-plano="proposiciones" aria-pressed="true">Proposiciones</button>
-  <button class="btn" data-plano="hechos" aria-pressed="true">Hechos</button>
+  <button class="btn" id="bFiltros">Filtros</button>
+  <button class="btn" id="bSinProbar" aria-pressed="false">Sin probar</button>
+  <button class="btn" data-plano="proposiciones" aria-pressed="false">Proposiciones</button>
+  <button class="btn" data-plano="hechos" aria-pressed="false">Hechos</button>
   <button class="btn" id="bNombres" aria-pressed="false">Nombres</button>
   <button class="btn" id="bSobre">Sobre este mapa</button>
 </nav>
@@ -96,8 +105,21 @@ const dias = (s) => (Date.now() - aFecha(s).getTime()) / 86400000;
 
 // ---------- modelo
 let nodos = [], aristas = [], porId = {}, vecinos = {};
-const cam = { yaw: 0.62, pitch: 0.5, zoom: 1, px: 0, py: 0 };
-const ver = { planos: { proposiciones: true, hechos: true }, nombres: false, estados: new Set(), texto: "", sector: null, sel: null };
+const cam = { yaw: 0.62, pitch: 0.62, zoom: 1, px: 0, py: 0 };  // arranque: solo la figura, vista alta
+// Por defecto el mapa es ligero: solo las piezas y las relaciones ya comprobadas. Lo demás se enciende con los filtros.
+const ver = { planos: { proposiciones: false, hechos: false }, nombres: false, estados: new Set(), texto: "", sector: null, sel: null,
+  sinprobar: false, sectores: new Set(), rama: null, ramaDe: null };
+function rama(id, sentido) {  // "abajo": lo que depende de esta pieza (sus ramas); "arriba": de qué depende (sus madres)
+  const dentro = new Set([id]); let frente = [id];
+  while (frente.length) { const sig = []; for (const a of aristas) { if (a.tipo !== "rel") continue;
+      const [de, hacia] = sentido === "abajo" ? [a.a.id, a.b.id] : [a.b.id, a.a.id];
+      if (frente.includes(de) && !dentro.has(hacia)) { dentro.add(hacia); sig.push(hacia); } } frente = sig; }
+  ver.rama = dentro; ver.ramaDe = `${sentido === "abajo" ? "Ramas de" : "Madres de"} ${porId[id].nombre}`; ver.sel = null; cierra("#ficha"); avisoFiltro(); pide(true);
+}
+function avisoFiltro() {
+  const n = ver.sectores.size + (ver.rama ? 1 : 0), b = $("#bFiltros"); b.textContent = n ? `Filtros (${n})` : "Filtros"; b.setAttribute("aria-pressed", n > 0);
+  const q = $("#quitar"); q.hidden = !ver.rama; if (ver.rama) q.textContent = `${ver.ramaDe} · quitar ×`;
+}
 const lienzo = $("#lienzo"), gN = $("#gNodos"), gA = $("#gAristas"), gP = $("#gPlanos");
 let anillos = [], rotulos = [], RADIO = 500;
 
@@ -107,7 +129,7 @@ function preparar(d) {
   for (const o of d.objetos) add({ ...o, clase: "obj", plano: "figura", rotulo: o.nombre });
   for (const r of d.relaciones) {
     const a = porId[r.de], b = porId[r.a];
-    const medio = [(a.pos[0] + b.pos[0]) / 2, 0, (a.pos[2] + b.pos[2]) / 2];
+    const medio = [(a.pos[0] + b.pos[0]) / 2, (a.pos[1] + b.pos[1]) / 2, (a.pos[2] + b.pos[2]) / 2];
     porId[r.id] = { ...r, clase: "rel", plano: "figura", pos: medio, rotulo: `${a.nombre} ${VERBO[r.tipo] || r.tipo} ${b.nombre}`, a: a, b: b };
     vecinos[r.id] = new Set([a.id, b.id]);
     aristas.push({ id: r.id, tipo: "rel", a, b, estado: r.estado, plano: "figura", ref: porId[r.id] });
@@ -122,14 +144,15 @@ function preparar(d) {
 }
 
 function dibujar(d) {
-  gN.textContent = gA.textContent = gP.textContent = ""; anillos = []; rotulos = [];
+  const gR = $("#gRotulos");
+  gN.textContent = gA.textContent = gP.textContent = gR.textContent = ""; anillos = []; rotulos = [];
   const R = RADIO = d.radio || 500;
   for (const [nombre, y, leyenda] of [["hechos", d.planos.hechos, "HECHOS · lo observado"], ["figura", d.planos.figura, "FIGURA · el sistema"], ["proposiciones", d.planos.proposiciones, "PROPOSICIONES · lo que se afirma"]]) {
     const pts = []; for (let i = 0; i < 56; i++) { const t = i / 56 * 2 * Math.PI; pts.push([R * Math.cos(t), y, R * Math.sin(t)]); }
     anillos.push({ nombre, pts, el: svg("polygon", { fill: "var(--tinta)", "fill-opacity": nombre === "figura" ? .035 : .02, stroke: "var(--linea)", "stroke-width": 1, "stroke-dasharray": nombre === "figura" ? "" : "3 5" }, gP),
       txt: Object.assign(svg("text", { class: "plano", "text-anchor": "start" }, gP), { textContent: leyenda }) });
   }
-  for (const s of d.sectores) { const t = svg("text", { class: "sector", "text-anchor": "middle" }, gP); t.textContent = s.nombre; t.dataset.sector = s.id; rotulos.push({ el: t, pos: [(R + 30) * Math.cos(s.angulo), 0, (R + 30) * Math.sin(s.angulo)], id: s.id }); }
+  for (const s of d.sectores) { const t = svg("text", { class: "sector", "text-anchor": "middle" }, gR); t.textContent = s.nombre; t.dataset.sector = s.id; rotulos.push({ el: t, pos: [(R + 30) * Math.cos(s.angulo), 0, (R + 30) * Math.sin(s.angulo)], id: s.id }); }
   for (const a of aristas) {
     const rel = a.tipo === "rel";
     a.el = svg("line", { stroke: rel ? COLOR[a.estado] : "var(--tinta3)", "stroke-width": rel ? (a.estado === "estructura" ? 1 : 1.8) : .8, "stroke-linecap": "round",
@@ -139,7 +162,14 @@ function dibujar(d) {
     const g = n.el = svg("g", {}, gN), c = COLOR[n.estado], lleno = ["funciona", "reparar", "mejorar"].includes(n.estado);
     const viejo = n.ultima_prueba && dias(n.ultima_prueba) > 7 && n.estado === "funciona";
     if (n.clase === "obj") {
-      svg("circle", { r: 11, class: "ne", fill: lleno ? c : "var(--sup)", stroke: c, "stroke-width": 2, "stroke-dasharray": lleno ? "" : "3 3", opacity: viejo ? .55 : 1 }, g);
+      // Tamaño = cuánto cuelga de la pieza. Doble aro = nodo de origen. Cuadro punteado con + = aún por construir.
+      const r = n.r = 9 + Math.min(8, (n.ramas || 0) * .8);
+      if (n.pos[1] > 0) n.tallo = svg("line", { stroke: "var(--tinta3)", "stroke-width": 1, opacity: .45 }, gA);
+      if (n.por_construir) { svg("rect", { x: -10, y: -10, width: 20, height: 20, rx: 4, class: "ne", fill: "var(--sup)", stroke: c, "stroke-width": 1.8, "stroke-dasharray": "2 3" }, g);
+        svg("path", { d: "M-4.5 0 L4.5 0 M0 -4.5 L0 4.5", class: "ne", stroke: c, "stroke-width": 1.8, fill: "none" }, g); }
+      else svg("circle", { r, class: "ne", fill: lleno ? c : "var(--sup)", stroke: c, "stroke-width": 2, "stroke-dasharray": lleno ? "" : "3 3", opacity: viejo ? .55 : 1 }, g);
+      if (n.origen) svg("circle", { r: r + 4.5, class: "ne", fill: "none", stroke: "var(--tinta)", "stroke-width": 1.4 }, g);
+      if (n.estabilidad === "inestable") svg("circle", { r: r + 8, class: "ne", fill: "none", stroke: "var(--medio)", "stroke-width": 1.6, "stroke-dasharray": "1 3" }, g);
     } else if (n.clase === "prop") {
       const dash = n.etiqueta === "INFERIDO" ? "2 2.5" : n.estado === "nodemostrado" || n.estado === "resuelto" ? "3 3" : "";
       svg("path", { d: "M0 -10 L10 0 L0 10 L-10 0 Z", class: "ne", fill: lleno ? c : "var(--sup)", stroke: c, "stroke-width": 2, "stroke-dasharray": dash }, g);
@@ -148,7 +178,7 @@ function dibujar(d) {
       const fuerte = n.tipo === "prueba_real" || n.tipo === "observacion";
       svg("rect", { x: -7, y: -7, width: 14, height: 14, rx: 2, class: "ne", fill: n.tipo === "prueba_real" ? "var(--tinta)" : fuerte ? "var(--tinta3)" : "var(--sup)", stroke: "var(--tinta2)", "stroke-width": 1.5, "stroke-dasharray": fuerte ? "" : "2 2" }, g);
     }
-    if (GLIFO[n.estado] && n.clase !== "ev") svg("path", { d: GLIFO[n.estado], class: "ne", fill: "none", stroke: "#111", "stroke-width": 2, "stroke-linecap": "round", "stroke-linejoin": "round" }, g);
+    if (GLIFO[n.estado] && n.clase !== "ev" && !n.por_construir) svg("path", { d: GLIFO[n.estado], class: "ne", fill: "none", stroke: "#111", "stroke-width": 2, "stroke-linecap": "round", "stroke-linejoin": "round" }, g);
     n.anillo = svg("circle", { r: 17, class: "ne", fill: "none", stroke: "var(--foco)", "stroke-width": 2.5, visibility: "hidden" }, g);
     if (n.clase === "obj") { n.txt = svg("text", { x: 15, y: 4 }, g); n.txt.textContent = n.nombre; }
   }
@@ -165,6 +195,13 @@ function proyecta(p) {
 }
 function visible(n) {
   if (n.plano !== "figura" && !ver.planos[n.plano]) return false;
+  if (n.clase === "obj") {
+    if (ver.rama && !ver.rama.has(n.id)) return false;
+    if (ver.sectores.size && !ver.sectores.has(n.sector)) return false;
+  } else if (ver.rama || ver.sectores.size) {  // proposiciones y hechos: solo los de piezas visibles
+    const piezas = n.clase === "prop" ? n.sobre : n.apoya.flatMap((p) => porId[p].sobre);
+    if (!piezas.some((s) => { const o = porId[s]; return o.clase === "rel" ? visible(o.a) || visible(o.b) : visible(o); })) return false;
+  }
   return true;
 }
 function apagado(n) {
@@ -177,11 +214,13 @@ function apagado(n) {
 function pinta() {
   sucio = false;
   for (const n of nodos) {
-    const v = visible(n); n.el.style.display = v ? "" : "none"; if (!v) continue;
+    const v = visible(n); n.el.style.display = v ? "" : "none"; if (!v) { if (n.tallo) n.tallo.style.display = "none"; continue; }
     const s = n.s = proyecta(n.pos), k = Math.max(.42, Math.min(2.6, s[3] * 1.15));
     n.el.setAttribute("transform", `translate(${s[0].toFixed(1)} ${s[1].toFixed(1)}) scale(${k.toFixed(3)})`);
     const off = apagado(n); n.el.style.opacity = off ? .13 : 1;
     n.anillo.setAttribute("visibility", n.id === ver.sel ? "visible" : "hidden");
+    if (n.tallo) { const pie = proyecta([n.pos[0], 0, n.pos[2]]); n.tallo.style.display = v ? "" : "none"; n.tallo.style.opacity = off ? .06 : .45;
+      n.tallo.setAttribute("x1", s[0].toFixed(1)); n.tallo.setAttribute("y1", s[1].toFixed(1)); n.tallo.setAttribute("x2", pie[0].toFixed(1)); n.tallo.setAttribute("y2", pie[1].toFixed(1)); }
     if (n.txt) {
       const on = !off && (ver.nombres || k > 1.05 || (ver.sel && (n.id === ver.sel || vecinos[ver.sel].has(n.id))) || (ver.texto && !off));
       n.txt.style.display = on ? "" : "none";
@@ -191,7 +230,9 @@ function pinta() {
   }
   for (const r of Object.values(porId)) if (r.clase === "rel") r.s = proyecta(r.pos);
   for (const a of aristas) {
-    const v = (a.plano === "figura" || ver.planos[a.plano]) && visible(a.a) && visible(a.b);
+    const tocada = ver.sel && (a.id === ver.sel || a.a.id === ver.sel || a.b.id === ver.sel);
+    const v = (a.plano === "figura" || ver.planos[a.plano]) && visible(a.a) && visible(a.b)
+      && (a.tipo !== "rel" || a.estado !== "nodemostrado" || ver.sinprobar || ver.rama || tocada || ver.estados.has("nodemostrado"));
     a.el.style.display = v ? "" : "none"; if (!v) continue;
     const p = a.a.s, q = a.b.s;
     a.el.setAttribute("x1", p[0].toFixed(1)); a.el.setAttribute("y1", p[1].toFixed(1)); a.el.setAttribute("x2", q[0].toFixed(1)); a.el.setAttribute("y2", q[1].toFixed(1));
@@ -217,13 +258,15 @@ function pinta() {
 }
 function pide(orden) { if (orden) ordenar = true; if (!sucio) { sucio = true; requestAnimationFrame(pinta); } }
 function ajusta() { W = lienzo.clientWidth; H = lienzo.clientHeight; pide(true); }
-function encuadre() { const r = RADIO / 500; cam.zoom = Math.min(W / (1160 * r), (H - 150) / (1150 + 480 * r)); cam.px = 0; cam.py = 14; }
+function encuadre() { const r = RADIO / 500;
+  if (!ver.planos.proposiciones && !ver.planos.hechos) { cam.zoom = Math.min(W / (2.3 * RADIO), (H - 150) / (2.0 * RADIO)); cam.px = 0; cam.py = 0; return; } cam.zoom = Math.min(W / (1160 * r), (H - 150) / (1150 + 480 * r)); cam.px = 0; cam.py = 14; }
 function planos(on) { for (const p of ["proposiciones", "hechos"]) { ver.planos[p] = on; $(`[data-plano=${p}]`).setAttribute("aria-pressed", on); } }
-function vista(v) {
+function vista(v, ya) {
   const meta = { "3d": [0.62, 0.5], planta: [0, Math.PI / 2], perfil: [0.35, 0.03] }[v];
-  const de = [cam.yaw, cam.pitch], t0 = performance.now();
+  const de = ya ? meta : [cam.yaw, cam.pitch], t0 = performance.now();
   // Vista desde arriba: los tres planos caerían uno sobre otro, así que queda solo la figura.
-  planos(v !== "planta"); encuadre(); if (v === "planta") cam.zoom = Math.min(W, H - 150) / (2.36 * RADIO);
+  if (v === "planta") planos(false); else planos(true);  // 3D y Perfil muestran los tres planos
+  encuadre(); if (v === "planta") cam.zoom = Math.min(W, H - (H < 560 ? 96 : 150)) / (2.36 * RADIO);
   document.querySelectorAll("[data-vista]").forEach((b) => b.setAttribute("aria-pressed", b.dataset.vista === v));
   (function paso(t) { const k = Math.min(1, (t - t0) / 380), e = k * k * (3 - 2 * k); cam.yaw = de[0] + (meta[0] - de[0]) * e; cam.pitch = de[1] + (meta[1] - de[1]) * e; pide(k === 1); if (k < 1) requestAnimationFrame(paso); })(t0);
 }
@@ -265,6 +308,7 @@ function propHtml(p) {
   <p><a href="#" data-ir="${p.id}" style="color:inherit;text-decoration:none">${esc(p.texto)}</a></p>
   ${p.cierre ? `<p class="chico"><b>Resuelto.</b> ${esc(p.cierre)}</p>` : ""}
   ${p.falta && !p.cerrada ? `<p class="chico"><b>Falta:</b> ${esc(p.falta)}</p>` : ""}
+  ${!p.cerrada && ["reparar", "mejorar"].includes(p.estado) ? `<p class="chico"><b>Qué se está haciendo:</b> ${esc(p.haciendo || (p.auto === true ? "El monitor lo vuelve a medir cada 15 minutos; nadie lo está reparando todavía." : "Nada todavía: está registrado, sin reparación en curso."))}</p>` : ""}
   ${p.ref ? `<p class="chico suave"><b>Se refutaría si:</b> ${esc(p.ref)}</p>` : `<p class="chico suave">Es una decisión del propietario, no un hecho comprobable.</p>`}
   ${p.de ? `<p class="chico suave"><b>Se infiere de:</b> ${esc(p.de)}</p>` : ""}
   ${evs.length ? evs.map(evHtml).join("") : `<div class="ev suave">Sin evidencia: nadie lo ha probado todavía.</div>`}</div>`;
@@ -279,6 +323,9 @@ function ficha(id) {
   if (n.clase === "obj" || n.clase === "rel") {
     h += `<h2>${esc(n.clase === "obj" ? n.nombre : n.rotulo)}</h2><p>${estadoHtml(n.estado)}</p>`;
     if (n.que_es) h += `<p>${esc(n.que_es)}</p>`;
+    if (n.clase === "obj") h += `<p class="chico"><b>${esc(DATOS.sectores.find((s) => s.id === n.sector).nombre)}</b> › ${esc(n.tipo)} · ${n.por_construir ? "<b>por construir</b>: es una opción asociada, todavía no existe" : n.origen ? `<b>nodo de origen</b>, ${n.ramas} piezas cuelgan de él` : `${n.ramas} ramas, depende de ${n.madres}`}<br>
+      Estabilidad: <b>${esc(n.estabilidad)}</b> <span class="suave">(${n.muestras} mediciones${n.cambios ? `, ${n.cambios} cambios de estado` : ""})</span></p>`;
+    if (n.clase === "obj") h += `<p><button class="btn" data-rama="abajo" data-id="${id}">Ver sus ramas</button> <button class="btn" data-rama="arriba" data-id="${id}">Ver sus madres</button></p>`;
     if (n.nota) h += `<p class="suave">${esc(n.nota)}</p>`;
     if (n.estado === "estructura") h += `<p class="suave">Relación de estructura: dice dónde está cada cosa, no afirma que funcione.</p>`;
     else h += `<p class="chico suave">${n.ultima_prueba ? `Última comparación con la realidad: <b>${fechaTexto(n.ultima_prueba)}</b> (${hace(n.ultima_prueba)}).` : "Nunca se ha comparado con la realidad: <b>no demostrado</b> no significa que falle."}</p>`;
@@ -341,6 +388,52 @@ function sobre(d) {
   <h3>Datos</h3><p class="chico">Datos al <code>${esc(d.datos_al)}</code> · versión ${d.alcance === "publico" ? "alojada (sin rutas ni direcciones)" : "local (completa)"} · ${d.objetos.length} piezas, ${d.relaciones.length} relaciones, ${d.proposiciones.length} proposiciones, ${d.evidencias.length} hechos.</p>`;
   s.classList.add("abierta"); cierra("#ficha"); cierra("#lista");
 }
+function filtros() {
+  const l = $("#lista"), cuenta = (s) => nodos.filter((n) => n.clase === "obj" && n.sector === s).length;
+  l.innerHTML = `<button class="cerrar" aria-label="Cerrar">×</button><h2>Filtros</h2>
+  <h3>Qué tipo de piezas ver</h3>` + DATOS.sectores.map((s) => `<label class="fila"><input type="checkbox" data-sector="${s.id}" ${ver.sectores.has(s.id) ? "checked" : ""}> <span>${esc(s.nombre)} <span class="suave">· ${cuenta(s.id)}</span></span></label>`).join("")
+  + `<p class="chico suave">Sin marcar ninguno se ven todos.</p>
+  <h3>Madre y ramas</h3><p class="chico">Toca una pieza del mapa y, en su ficha, elige <b>Ver sus ramas</b> (todo lo que cuelga de ella) o <b>Ver sus madres</b> (todo aquello de lo que depende). El resto se oculta.</p>
+  ${ver.rama ? `<button class="btn" id="quitar2">${esc(ver.ramaDe)} · quitar</button>` : ""}
+  <h3>Cuánto detalle</h3>
+  <p class="chico"><b>Sin probar</b>: muestra también las relaciones que solo están declaradas. <b>Proposiciones</b> y <b>Hechos</b>: añaden los planos de lo que se afirma y de la evidencia.</p>`;
+  l.classList.add("abierta"); cierra("#ficha"); cierra("#sobre");
+  l.querySelectorAll("[data-sector]").forEach((c) => c.onchange = () => { c.checked ? ver.sectores.add(c.dataset.sector) : ver.sectores.delete(c.dataset.sector); avisoFiltro(); pide(true); });
+  const q = $("#quitar2"); if (q) q.onclick = () => { ver.rama = null; avisoFiltro(); pide(true); filtros(); };
+}
+function reparaciones() {
+  const l = $("#lista"), ord = { reparar: 0, mejorar: 1 };
+  const ps = DATOS.proposiciones.filter((p) => p.estado in ord).sort((a, b) => ord[a.estado] - ord[b.estado]);
+  const inest = nodos.filter((n) => n.clase === "obj" && n.estabilidad === "inestable");
+  l.innerHTML = `<button class="cerrar" aria-label="Cerrar">×</button><h2>Reparaciones</h2>
+  <p class="chico suave">Cada falla abierta, qué falta y qué se está haciendo. Si dice «nada todavía», es que nadie la está reparando.</p>
+  ${inest.length ? `<h3>Inestables (cambian de estado)</h3>` + inest.map((n) => `<button class="fila" data-ir="${n.id}">${icono(n.estado)}<span>${esc(n.nombre)} · ${n.cambios} cambios</span></button>`).join("") : ""}
+  <h3>${ps.length} fallas y mejoras abiertas</h3>` + ps.map(propHtml).join("");
+  l.classList.add("abierta"); cierra("#ficha"); cierra("#sobre");
+}
+const charla = [];
+function chat() {
+  const l = $("#lista");
+  l.innerHTML = `<button class="cerrar" aria-label="Cerrar">×</button><h2>Preguntar al mapa</h2>
+  <p class="chico suave">Responde un modelo gratuito (DeepSeek, con Gemini de respaldo) a través de tu puente. Solo recibe el resumen sin rutas ni direcciones, y solo puede hablar de lo que el mapa tiene con evidencia.</p>
+  <div id="hilo"></div>
+  <p>${["¿Está todo bien?", "¿Qué falta?", "¿Qué reparo primero?", "¿Qué no está demostrado?"].map((q) => `<button class="btn" data-q="${q}" style="margin:2px">${q}</button>`).join("")}</p>
+  <form id="fChat" style="display:flex;gap:6px"><input id="q" placeholder="Escribe tu pregunta" autocomplete="off" style="flex:1;padding:9px;border-radius:10px;border:1px solid var(--linea);background:var(--sup);color:var(--tinta);font:inherit"><button class="btn">Enviar</button></form>`;
+  const hilo = $("#hilo"), pinta = () => { hilo.innerHTML = charla.map((t) => `<div class="tarjeta ${t.role === "user" ? "" : "e-decision"}"><b>${t.role === "user" ? "Tú" : "Mapa"}</b><p style="white-space:pre-wrap">${esc(t.content)}</p>${t.modelo ? `<p class="chico suave">${esc(t.modelo)}</p>` : ""}</div>`).join(""); l.scrollTop = l.scrollHeight; };
+  const envia = async (q) => { if (!q) return; charla.push({ role: "user", content: q }); charla.push({ role: "assistant", content: "Pensando…" }); pinta();
+    try { const r = await fetch("chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mensajes: charla.slice(0, -1).map(({ role, content }) => ({ role, content })) }) });
+      const j = await r.json(); charla[charla.length - 1] = { role: "assistant", content: j.respuesta || j.error || "Sin respuesta.", modelo: j.modelo };
+    } catch (_) { charla[charla.length - 1] = { role: "assistant", content: "No hay conexión con la PC: la conversación solo funciona con la PC encendida y dentro de tu red privada." }; }
+    pinta(); };
+  l.querySelectorAll("[data-q]").forEach((b) => b.onclick = () => envia(b.dataset.q));
+  $("#fChat").onsubmit = (e) => { e.preventDefault(); const v = $("#q").value.trim(); $("#q").value = ""; envia(v); };
+  pinta(); l.classList.add("abierta"); cierra("#ficha"); cierra("#sobre");
+}
+$("#bRep").onclick = reparaciones; $("#bChat").onclick = chat;
+$("#bFiltros").onclick = filtros;
+$("#quitar").onclick = () => { ver.rama = null; avisoFiltro(); pide(true); };
+$("#bSinProbar").onclick = (e) => { ver.sinprobar = !ver.sinprobar; e.currentTarget.setAttribute("aria-pressed", ver.sinprobar); pide(); };
+document.addEventListener("click", (e) => { const r = e.target.closest("[data-rama]"); if (r) rama(r.dataset.id, r.dataset.rama); });
 $("#bLista").onclick = lista; $("#bSobre").onclick = () => sobre(DATOS);
 $("#bNombres").onclick = (e) => { ver.nombres = !ver.nombres; e.currentTarget.setAttribute("aria-pressed", ver.nombres); pide(); };
 document.querySelectorAll("[data-vista]").forEach((b) => b.onclick = () => vista(b.dataset.vista));
@@ -353,6 +446,8 @@ addEventListener("keydown", (e) => { if (e.key === "Escape") { elige(null); cier
 // ---------- arranque
 function arranca(d) {
   DATOS = d; preparar(d); dibujar(d); cabecera(d); W = lienzo.clientWidth; H = lienzo.clientHeight; encuadre(); pide(true);
+  // Pantalla apaisada y baja (celular girado): los tres planos apilados no caben; se empieza desde arriba.
+  if (W > H * 1.25 && H < 560) vista("planta", true);
   $("#carga").style.display = "none"; setInterval(() => cabecera(DATOS), 60000);
   window.MAPA = { datos: d, elige, vista, cam, nodos: () => nodos.length };
   const m = location.hash.match(/nodo=([\w.-]+)/); if (m && porId[m[1]]) elige(m[1], true);
@@ -368,6 +463,7 @@ async function abrir(claveTexto) {
   try { const d = await descifra(claveTexto); try { localStorage.setItem("mapa.k", claveTexto); } catch (_) {} arranca(d); return true; }
   catch (err) { $("#cargaTexto").textContent = "No se pudo abrir el mapa: la clave no corresponde o no hay conexión."; $("#claveForm").hidden = false; return false; }
 }
+if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost" || location.hostname === "127.0.0.1")) navigator.serviceWorker.register("sw.js").catch(() => {});
 (async function () {
   if (DATOS) return arranca(DATOS);
   const enlace = (location.hash.match(/k=([A-Za-z0-9_-]{43})/) || [])[1];
