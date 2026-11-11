@@ -86,7 +86,6 @@ svg text.sector{font-size:12px;fill:var(--tinta2);cursor:pointer}
 <aside class="hoja" id="ficha" aria-live="polite"></aside>
 <aside class="hoja" id="lista"></aside>
 <aside class="hoja" id="sobre"></aside>
-<script src="chat.js"></script>
 <script>
 "use strict";
 let DATOS = /*__DATOS__*/null;
@@ -423,32 +422,16 @@ const charla = [];
 function chat() {
   const l = $("#lista");
   l.innerHTML = `<button class="cerrar" aria-label="Cerrar">×</button><h2>Preguntar al mapa</h2>
-  <p class="chico suave">La IA usa tu puente privado mientras esté disponible. Sin PC o sin internet, puedes consultar estados, fallas y pendientes del mapa guardado; se indica «Consulta local · sin IA».</p>
-  <label class="chico"><input type="checkbox" id="soloLocal"> Consultar solo el mapa guardado (sin IA)</label>
+  <p class="chico suave">Responde un modelo gratuito (DeepSeek, con Gemini de respaldo) a través de tu puente. Solo recibe el resumen sin rutas ni direcciones, y solo puede hablar de lo que el mapa tiene con evidencia.</p>
   <div id="hilo"></div>
   <p>${["¿Está todo bien?", "¿Qué falta?", "¿Qué reparo primero?", "¿Qué no está demostrado?"].map((q) => `<button class="btn" data-q="${q}" style="margin:2px">${q}</button>`).join("")}</p>
   <form id="fChat" style="display:flex;gap:6px"><input id="q" placeholder="Escribe tu pregunta" autocomplete="off" style="flex:1;padding:9px;border-radius:10px;border:1px solid var(--linea);background:var(--sup);color:var(--tinta);font:inherit"><button class="btn">Enviar</button></form>`;
   const hilo = $("#hilo"), pinta = () => { hilo.innerHTML = charla.map((t) => `<div class="tarjeta ${t.role === "user" ? "" : "e-decision"}"><b>${t.role === "user" ? "Tú" : "Mapa"}</b><p style="white-space:pre-wrap">${esc(t.content)}</p>${t.modelo ? `<p class="chico suave">${esc(t.modelo)}</p>` : ""}</div>`).join(""); l.scrollTop = l.scrollHeight; };
-  let enviando = false;
-  const envia = async (q) => {
-    if (!q || enviando) return;
-    enviando = true;
-    const posicion = charla.length;
-    charla.push({ role:"user", content:q }, { role:"assistant", content:"Consultando…" });
-    l.querySelectorAll("[data-q], #fChat button").forEach(b => b.disabled = true);
-    pinta();
-    try {
-      let clave = null; try { clave = localStorage.getItem("mapa.k"); } catch (_) {}
-      const r = await MapaChat.responde(DATOS, q, charla.slice(0,posicion+1).map(({role,content}) => ({role,content})), clave, $("#soloLocal").checked);
-      charla[posicion+1] = {role:"assistant",content:r.respuesta,modelo:r.modelo};
-    } catch (_) {
-      charla[posicion+1] = {role:"assistant",content:"No se pudo completar la consulta. Puedes reintentar.",modelo:"Error local"};
-    } finally {
-      enviando = false;
-      l.querySelectorAll("[data-q], #fChat button").forEach(b => b.disabled = false);
-      pinta();
-    }
-  };
+  const envia = async (q) => { if (!q) return; charla.push({ role: "user", content: q }); charla.push({ role: "assistant", content: "Pensando…" }); pinta();
+    try { const r = await fetch("chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mensajes: charla.slice(0, -1).map(({ role, content }) => ({ role, content })) }) });
+      const j = await r.json(); charla[charla.length - 1] = { role: "assistant", content: j.respuesta || j.error || "Sin respuesta.", modelo: j.modelo };
+    } catch (_) { charla[charla.length - 1] = { role: "assistant", content: "No hay conexión con la PC: la conversación solo funciona con la PC encendida y dentro de tu red privada." }; }
+    pinta(); };
   l.querySelectorAll("[data-q]").forEach((b) => b.onclick = () => envia(b.dataset.q));
   $("#fChat").onsubmit = (e) => { e.preventDefault(); const v = $("#q").value.trim(); $("#q").value = ""; envia(v); };
   pinta(); l.classList.add("abierta"); cierra("#ficha"); cierra("#sobre");
